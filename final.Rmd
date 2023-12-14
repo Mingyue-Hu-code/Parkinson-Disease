@@ -1,0 +1,88 @@
+---
+title: "Final"
+author: "mingyue hu"
+date: "4/21/2022"
+output: word_document
+---
+
+
+```{r}
+df<-read.csv(file = "parkinsons_updrs.data")
+
+df<-df[,-c(1,5)]
+head(df)
+
+df$sex<-as.factor(df$sex)
+```
+###  PCR prediction
+```{r}
+library(ggplot2)
+library(lattice)
+library(caret)
+pcr_loo <- train(y=df[,4],
+                x=df[,-4],
+                 method = "pcr",
+                 preProcess = c("center", "scale"),
+                 tuneGrid = data.frame(ncomp=1:19),
+                 trControl=trainControl(method = "LOOCV"))
+pcr_loo_result <- pcr_loo$results 
+plot(pcr_loo)
+pcr_loo_result[which.min(pcr_loo_result$RMSE),]
+
+library(pls)
+pcrdata<-pcr(data = df, formula = total_UPDRS~.,ncomp = 13)
+pcrPred<-predict(pcrdata, ncomp=13)
+RMSE(pcrPred, df$total_UPDRS)
+cor(pcrPred, df$total_UPDRS)
+
+```
+
+
+### random forest
+```{r}
+rfTune.oob<-train(y=df[,4],
+                x=df[,-4], method="rf",
+                  tuneGrid=data.frame(mtry=1:19), ntree=1000,
+                  trControl=trainControl(method="oob"))
+rfTune.oob
+
+rfTune_oob_result <- rfTune.oob$results
+plot(rfTune.oob)
+rfTune_oob_result[which.min(rfTune_oob_result$RMSE),]
+
+library(randomForest)
+rfmodel <- randomForest(x = df[,-4], y = df[,4], ntree = 1000, mtry = 19) 
+rfprediction <- rfmodel$predicted
+
+RMSE(rfprediction, df$total_UPDRS)
+cor(rfprediction, df$total_UPDRS)
+```
+
+### neural network
+```{r}
+library(caret)
+nnet.grid<-expand.grid(size=seq(1,20,length.out=20),decay=seq(0.3,0.8,length.out=6))
+set.seed(123456)
+
+nnetTune<-train(y=df[,4],
+                x=df[,-4],
+                tuneGrid=nnet.grid,
+                method="nnet",trace=FALSE,
+                preProc=c("center","scale"),
+                linout=TRUE,maxit=500,
+                trControl=trainControl(method="repeatedcv",repeats=2,number=5))
+
+nnetTune_result <- nnetTune$results
+plot(nnetTune)
+nnetTune_result[which.min(nnetTune_result$RMSE),]
+
+df<-read.csv(file = "parkinsons_updrs.data")
+df<-df[,-c(1,5)]
+library(nnet)
+nnetdata<-nnet(y=df[,4], x=scale(df[,-4]), size=17, decay=0.7,linout=TRUE, maxit=500)
+nnetPred<-predict(nnetdata, scale(df[,-4]))
+RMSE(nnetPred, df$total_UPDRS)
+cor(nnetPred, df$total_UPDRS)
+```
+
+
